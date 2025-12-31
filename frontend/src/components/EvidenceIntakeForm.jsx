@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import axios from 'axios';
 
 // Simple evidence intake form; auto-filled officer fields are read-only to discourage tampering.
 export default function EvidenceIntakeForm({
@@ -30,18 +31,130 @@ export default function EvidenceIntakeForm({
     deviceOwner: '',
   });
 
+  const [proofImage, setProofImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState(null); // 'success', 'error', or null
+
   const handleChange = (field) => (event) => {
     setForm((prev) => ({ ...prev, [field]: event.target.value }));
   };
 
-  const handleSubmit = (event) => {
+  const handleImageChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/bmp', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        alert('Please select a valid image file (JPEG, PNG, GIF, BMP, or WebP)');
+        return;
+      }
+      
+      // Validate file size (10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Image size should be less than 10MB');
+        return;
+      }
+      
+      setProofImage(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setProofImage(null);
+    setImagePreview(null);
+  };
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    const payload = { ...form };
-    if (onSubmit) {
-      onSubmit(payload);
-    } else {
-      // Fallback for quick wiring tests.
-      console.log('Evidence intake payload', payload);
+    setIsSubmitting(true);
+    setSubmitStatus(null);
+
+    try {
+      let proofImagePath = '';
+      let proofImageOriginalName = '';
+      
+      // Upload image first if provided
+      if (proofImage) {
+        const imageFormData = new FormData();
+        imageFormData.append('proofImage', proofImage);
+        
+        const imageResponse = await axios.post(
+          'http://localhost:5000/api/evidence/upload-image',
+          imageFormData,
+          {
+            headers: {
+              'Content-Type': 'multipart/form-data'
+            }
+          }
+        );
+        
+        if (imageResponse.data.success) {
+          proofImagePath = imageResponse.data.data.path;
+          proofImageOriginalName = imageResponse.data.data.originalName;
+        }
+      }
+      
+      // Submit evidence data with image path
+      const payload = { 
+        ...form,
+        proofImage: proofImagePath,
+        proofImageOriginalName: proofImageOriginalName
+      };
+      
+      // Send data to backend API
+      const response = await axios.post('http://localhost:5000/api/evidence/submit', payload);
+      
+      console.log('✅ Evidence submitted successfully:', response.data);
+      setSubmitStatus('success');
+      
+      // Custom callback if provided
+      if (onSubmit) {
+        onSubmit(response.data);
+      }
+      
+      // Reset form after successful submission
+      setTimeout(() => {
+        setForm({
+          officerId,
+          officerName,
+          stationUnit,
+          rank,
+          caseNumber: '',
+          caseTitle: '',
+          crimeType: '',
+          investigatingOfficer: '',
+          evidenceId: `EVID-${Date.now().toString(36).toUpperCase()}`,
+          evidenceType: '',
+          evidenceDescription: '',
+          sourceOfEvidence: '',
+          deviceId: '',
+          deviceOwner: '',
+        });
+        setProofImage(null);
+        setImagePreview(null);
+        setSubmitStatus(null);
+      }, 3000);
+      
+    } catch (error) {
+      console.error('❌ Error submitting evidence:', error);
+      setSubmitStatus('error');
+      
+      // Show error message from backend if available
+      if (error.response?.data?.message) {
+        alert(`Error: ${error.response.data.message}`);
+      } else {
+        alert('Failed to submit evidence. Please check if the server is running.');
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -208,22 +321,108 @@ export default function EvidenceIntakeForm({
           onChange={handleChange('deviceOwner')}
           placeholder="Optional"
         />
+
+        <label style={labelStyle}>Proof Image (optional)</label>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleImageChange}
+          style={{
+            ...inputStyle,
+            padding: '8px 12px',
+            cursor: 'pointer'
+          }}
+        />
+        <div style={requiredNote}>Upload an image as proof (Max 10MB, JPEG/PNG/GIF/BMP/WebP)</div>
+        
+        {imagePreview && (
+          <div style={{
+            marginTop: 12,
+            border: '2px solid #cbd5e1',
+            borderRadius: 8,
+            padding: 12,
+            background: '#ffffff',
+            position: 'relative'
+          }}>
+            <img
+              src={imagePreview}
+              alt="Proof preview"
+              style={{
+                maxWidth: '100%',
+                maxHeight: 300,
+                display: 'block',
+                margin: '0 auto',
+                borderRadius: 4
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleRemoveImage}
+              style={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                background: '#ef4444',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: 4,
+                padding: '6px 12px',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: 12
+              }}
+            >
+              Remove
+            </button>
+          </div>
+        )}
       </section>
+
+      {submitStatus === 'success' && (
+        <div style={{
+          marginTop: 16,
+          padding: '12px 16px',
+          background: '#d1fae5',
+          border: '1px solid #10b981',
+          borderRadius: 6,
+          color: '#065f46',
+          fontWeight: 600
+        }}>
+          ✅ Evidence submitted successfully to MongoDB Atlas!
+        </div>
+      )}
+
+      {submitStatus === 'error' && (
+        <div style={{
+          marginTop: 16,
+          padding: '12px 16px',
+          background: '#fee2e2',
+          border: '1px solid #ef4444',
+          borderRadius: 6,
+          color: '#991b1b',
+          fontWeight: 600
+        }}>
+          ❌ Failed to submit evidence. Please check server connection.
+        </div>
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
         <button
           type="submit"
+          disabled={isSubmitting}
           style={{
-            background: '#0f766e',
+            background: isSubmitting ? '#94a3b8' : '#0f766e',
             color: '#ffffff',
             border: 'none',
             borderRadius: 6,
             padding: '10px 16px',
             fontWeight: 700,
-            cursor: 'pointer',
+            cursor: isSubmitting ? 'not-allowed' : 'pointer',
+            opacity: isSubmitting ? 0.7 : 1,
+            transition: 'all 0.2s'
           }}
         >
-          Submit Evidence
+          {isSubmitting ? 'Submitting...' : 'Submit Evidence'}
         </button>
       </div>
     </form>

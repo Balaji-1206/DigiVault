@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "server": "node server/server.js",
+    "server:dev": "nodemon server/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -20,13 +22,19 @@
   "bugs": {
     "url": "https://github.com/Balaji-1206/DigiVault/issues"
   },
-  "homepage": "https://github.com/Balaji-1206/DigiVault#readme",
+  "hoaxios": "^1.6.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "mongoose": "^8.0.3",
+    "mepage": "https://github.com/Balaji-1206/DigiVault#readme",
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
+    "nodemon": "^3.0.2",
     "vite": "^6.4.1"
   }
 }
