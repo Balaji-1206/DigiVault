@@ -87,7 +87,7 @@ export default function EvidenceIntakeForm({
         imageFormData.append('proofImage', proofImage);
         
         const imageResponse = await axios.post(
-          'http://localhost:5000/api/evidence/upload-image',
+          '/api/evidence/upload-image',
           imageFormData,
           {
             headers: {
@@ -110,7 +110,7 @@ export default function EvidenceIntakeForm({
       };
       
       // Send data to backend API
-      const response = await axios.post('http://localhost:5000/api/evidence/submit', payload);
+      const response = await axios.post('/api/evidence/submit', payload);
       
       console.log('✅ Evidence submitted successfully:', response.data);
       setSubmitStatus('success');
