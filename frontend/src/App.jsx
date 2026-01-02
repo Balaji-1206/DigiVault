@@ -7,7 +7,7 @@ function App() {
     <div className="App">
       <header className="App-header">
         <h1>DigiVault</h1>
-        <p>Digital Evidence Integrity Management System</p>
+        <p>Digital Evidences Integrity Management System</p>
       </header>
       <main>
         <EvidenceIntakeForm 
