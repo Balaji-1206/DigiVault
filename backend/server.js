@@ -14,6 +14,7 @@ const dotenv = require('dotenv');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { encryptEvidence } = require('./encrypt');
 
 // Load environment variables
 dotenv.config();
@@ -83,27 +84,11 @@ mongoose.connect(MONGODB_URI, {
 
 // Evidence Schema
 const evidenceSchema = new mongoose.Schema({
-  // Officer Information
-  officerId: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  officerName: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  stationUnit: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  rank: {
-    type: String,
-    required: true,
-    trim: true
-  },
+  // Officer Information (encrypted)
+  officerId: String,
+  officerName: String,
+  stationUnit: String,
+  rank: String,
   
   // Case Details
   caseNumber: {
@@ -112,77 +97,23 @@ const evidenceSchema = new mongoose.Schema({
     trim: true,
     unique: true
   },
-  caseTitle: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  crimeType: {
-    type: String,
-    required: true,
-    enum: ['Theft', 'Cybercrime', 'Assault', 'Fraud', 'Homicide']
-  },
-  investigatingOfficer: {
-    type: String,
-    required: true,
-    trim: true
-  },
+  caseTitle: String,
+  crimeType: String,
+  investigatingOfficer: String,
   
-  // Evidence Details
-  evidenceId: {
-    type: String,
-    required: true,
-    unique: true,
-    trim: true
-  },
-  evidenceType: {
-    type: String,
-    required: true,
-    enum: ['Image', 'Video', 'Audio', 'Document', 'Log file']
-  },
-  evidenceDescription: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  sourceOfEvidence: {
-    type: String,
-    required: true,
-    enum: ['CCTV camera', 'Mobile phone', 'Laptop', 'Server logs']
-  },
-  deviceId: {
-    type: String,
-    trim: true,
-    default: ''
-  },
-  deviceOwner: {
-    type: String,
-    trim: true,
-    default: ''
-  },
+  // Evidence Details (encrypted)
+  evidenceId: String,
+  evidenceType: String,
+  evidenceDescription: String,
+  sourceOfEvidence: String,
+  deviceId: String,
+  deviceOwner: String,
   
-  // Proof Image
-  proofImage: {
-    type: String,
-    default: ''
-  },
-  proofImageOriginalName: {
-    type: String,
-    default: ''
-  },
-  
-  // Metadata
-  submittedAt: {
-    type: Date,
-    default: Date.now
-  },
-  status: {
-    type: String,
-    enum: ['Submitted', 'Under Review', 'Verified', 'Rejected'],
-    default: 'Submitted'
-  }
+  // Proof Image (encrypted)
+  proofImage: String,
+  proofImageOriginalName: String
 }, {
-  timestamps: true
+  versionKey: false
 });
 
 // Evidence Model
@@ -230,51 +161,40 @@ app.post('/api/evidence/submit', async (req, res) => {
   try {
     const evidenceData = req.body;
     
-    // Validate required fields
-    const requiredFields = [
-      'officerId', 'officerName', 'stationUnit', 'rank',
-      'caseNumber', 'caseTitle', 'crimeType', 'investigatingOfficer',
-      'evidenceId', 'evidenceType', 'evidenceDescription', 'sourceOfEvidence'
-    ];
+    // Encrypt the evidence data
+    const encryptionResult = encryptEvidence(evidenceData);
     
-    const missingFields = requiredFields.filter(field => !evidenceData[field]);
+    // Create evidence document with encrypted data
+    // Create evidence document with encrypted data ONLY
+    const evidence = new Evidence({
+      caseNumber: encryptionResult.caseId,
+      officerId: encryptionResult.encryptedData.officerId,
+      officerName: encryptionResult.encryptedData.officerName,
+      stationUnit: encryptionResult.encryptedData.stationUnit,
+      rank: encryptionResult.encryptedData.rank,
+      caseTitle: encryptionResult.encryptedData.caseTitle,
+      crimeType: encryptionResult.encryptedData.crimeType,
+      investigatingOfficer: encryptionResult.encryptedData.investigatingOfficer,
+      evidenceId: encryptionResult.encryptedData.evidenceId,
+      evidenceType: encryptionResult.encryptedData.evidenceType,
+      evidenceDescription: encryptionResult.encryptedData.evidenceDescription,
+      sourceOfEvidence: encryptionResult.encryptedData.sourceOfEvidence,
+      deviceId: encryptionResult.encryptedData.deviceId,
+      deviceOwner: encryptionResult.encryptedData.deviceOwner,
+      proofImage: encryptionResult.encryptedData.proofImage,
+      proofImageOriginalName: encryptionResult.encryptedData.proofImageOriginalName
+    });
     
-    if (missingFields.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Missing required fields',
-        missingFields
-      });
-    }
-    
-    // Create new evidence record
-    const newEvidence = new Evidence(evidenceData);
-    await newEvidence.save();
+    await evidence.save();
     
     res.status(201).json({
-      success: true,
-      message: 'Evidence submitted successfully',
-      data: newEvidence
+      message: 'Evidence submitted and encrypted successfully',
+      caseNumber: encryptionResult.caseId,
+      success: true
     });
-    
   } catch (error) {
     console.error('Error submitting evidence:', error);
-    
-    // Handle duplicate key errors
-    if (error.code === 11000) {
-      const duplicateField = Object.keys(error.keyPattern)[0];
-      return res.status(400).json({
-        success: false,
-        message: `${duplicateField} already exists`,
-        error: error.message
-      });
-    }
-    
-    res.status(500).json({
-      success: false,
-      message: 'Failed to submit evidence',
-      error: error.message
-    });
+    res.status(500).json({ error: error.message });
   }
 });
 
